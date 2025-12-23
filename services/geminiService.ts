@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { EmpireStats, AIResponse, Dynasty } from "../types";
 
@@ -12,19 +11,26 @@ const responseSchema = {
     newStats: {
       type: Type.OBJECT,
       properties: {
-        economy: { type: Type.NUMBER, description: "经济/资源实力 (0-100)" },
+        economy: { type: Type.NUMBER, description: "经济实力 (0-100)" },
         politics: { type: Type.NUMBER, description: "政治掌控力 (0-100)" },
         stability: { type: Type.NUMBER, description: "社会稳定度 (0-100)" },
         military: { type: Type.NUMBER, description: "军事/武力储备 (0-100)" },
+        diplomacy: { type: Type.NUMBER, description: "周边外交友好度 (0-100)" },
+        treasury: { type: Type.NUMBER, description: "国库余额" },
+        neighborStates: { 
+          type: Type.ARRAY, 
+          items: { type: Type.STRING },
+          description: "列举3个左右具体周边势力及其当前状态（如：'势力名: 态度'）" 
+        },
         territory: { type: Type.NUMBER, description: "领土面积（平方公里）" },
         population: { type: Type.NUMBER, description: "人口（百万）" },
       },
-      required: ["economy", "politics", "stability", "military", "territory", "population"],
+      required: ["economy", "politics", "stability", "military", "diplomacy", "treasury", "neighborStates", "territory", "population"],
     },
     events: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "期间发生的2-3个随机小事件。",
+      description: "期间发生的2-3个随机小事件，包含外交突发事件。",
     },
   },
   required: ["narrative", "newStats", "events"],
@@ -33,10 +39,10 @@ const responseSchema = {
 const dynastySchema = {
   type: Type.OBJECT,
   properties: {
-    name: { type: Type.STRING, description: "帝国的名称" },
-    period: { type: Type.STRING, description: "所处的时代或纪元名称" },
-    rulerTitle: { type: Type.STRING, description: "统治者的尊称" },
-    description: { type: Type.STRING, description: "对该背景的简短描述" },
+    name: { type: Type.STRING },
+    period: { type: Type.STRING },
+    rulerTitle: { type: Type.STRING },
+    description: { type: Type.STRING },
     initialStats: {
       type: Type.OBJECT,
       properties: {
@@ -44,26 +50,27 @@ const dynastySchema = {
         politics: { type: Type.NUMBER },
         stability: { type: Type.NUMBER },
         military: { type: Type.NUMBER },
+        diplomacy: { type: Type.NUMBER },
+        treasury: { type: Type.NUMBER },
+        neighborStates: { type: Type.ARRAY, items: { type: Type.STRING } },
         territory: { type: Type.NUMBER },
         population: { type: Type.NUMBER },
       },
-      required: ["economy", "politics", "stability", "military", "territory", "population"],
+      required: ["economy", "politics", "stability", "military", "diplomacy", "treasury", "neighborStates", "territory", "population"],
     },
-    color: { type: Type.STRING, description: "代表色的十六进制值，应符合氛围" },
+    color: { type: Type.STRING },
   },
   required: ["name", "period", "rulerTitle", "description", "initialStats", "color"],
 };
 
 export const generateDynasty = async (description: string): Promise<Dynasty> => {
-  // 在函数内部初始化以确保获取到最新的 API KEY
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
   
   const prompt = `根据以下描述，构思一个独特的帝国或文明设定：
   "${description || '一个未知的神秘国度'}"
   
-  请提供帝国的名称、时代、统治者称号、开局背景故事以及初始各项数值（0-100之间，领土与人口除外）。
-  领土应在 10,000 到 10,000,000 之间。人口应在 1 到 1,000 之间。
-  返回的结果必须是中文。`;
+  请设定约3个符合该世界观背景的具体邻国政权及其初始关系状态。
+  返回的结果必须是中文。不要包含任何 Markdown 格式代码块。`;
 
   try {
     const response = await ai.models.generateContent({
@@ -75,11 +82,11 @@ export const generateDynasty = async (description: string): Promise<Dynasty> => 
       },
     });
 
-    if (!response.text) throw new Error("Empty AI response");
-    const result = JSON.parse(response.text);
+    if (!response.text) throw new Error("AI returned empty content");
+    const result = JSON.parse(response.text.trim());
     return { ...result, id: Date.now().toString() };
   } catch (error) {
-    console.error("Gemini Generation Error:", error);
+    console.error("Dynasty Generation detailed logs:", error);
     throw error;
   }
 };
@@ -91,37 +98,25 @@ export const simulateTurn = async (
   command: string,
   historySummary: string
 ): Promise<AIResponse> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
   const prompt = `
     你是一个极其真实的宏观历史/文明模拟器。
     
     【当前场景】
     玩家是 "${dynastyName}" 的最高统治者 "${rulerTitle}"。
-    这是一个 "${dynastyName}" 背景的世界，请务必根据其特定的文化、科技或超自然设定来调整叙事逻辑。
     
-    【时间步长】
-    本次推演跨度为：2个月。
-    
-    【当前帝国状态】
-    - 经济/资源: ${currentStats.economy}/100
-    - 政治掌控: ${currentStats.politics}/100
-    - 稳定程度: ${currentStats.stability}/100
-    - 军事武力: ${currentStats.military}/100
-    - 国土面积: ${currentStats.territory} 平方公里
-    - 臣民人口: ${currentStats.population} 百万
-    
-    【历史背景】
-    ${historySummary}
+    【当前状态】
+    - 外交/邻国: ${currentStats.neighborStates.join(', ')}
+    - 综合外交分: ${currentStats.diplomacy}/100
+    - 国库: ${currentStats.treasury}
     
     【统治者谕旨】
     "${command}"
     
-    【模拟要求】
-    1. 基于现实主义考量进行推演。即使在虚构背景下，也要考虑逻辑、成本、后勤和社会契约。
-    2. 描述需具有史诗感，使用中文正式用语（如“奏报”、“黎民”、“疆域”、“枢密院”等）。
-    3. 如果命令过于荒谬，请描述其带来的灾难性后果。
-    4. 两个月的时间很短，变化应合理且渐进。
+    【推演指南】
+    1. 动态更新邻国状态：根据玩家的行为，决定某个邻国是变得更敌对还是更顺从。若发生战争或吞并，邻国名单可能变化。
+    2. 叙述要体现具体邻国对该谕旨的反应（例如：某国使节来访、某国边境增兵等）。
   `;
 
   try {
@@ -134,10 +129,10 @@ export const simulateTurn = async (
       },
     });
 
-    if (!response.text) throw new Error("Empty AI response");
-    return JSON.parse(response.text);
+    if (!response.text) throw new Error("AI returned empty content");
+    return JSON.parse(response.text.trim());
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Simulate Turn detailed logs:", error);
     throw error;
   }
 };

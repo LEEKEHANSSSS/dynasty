@@ -14,6 +14,8 @@
             color: #e7e5e4;
             overflow: hidden;
             margin: 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         .cinzel {
             font-family: 'Cinzel', serif;
@@ -44,7 +46,7 @@
           text-shadow: 0 0 15px rgba(217, 119, 6, 0.4);
         }
 
-        /* 仿纸张质感遮罩 - 确保pointer-events: none以防拦截点击 */
+        /* 仿纸张质感遮罩 */
         .texture-overlay {
           pointer-events: none;
           position: fixed;
@@ -52,15 +54,19 @@
           left: 0;
           width: 100%;
           height: 100%;
-          background-image: url('https://www.transparenttextures.com/patterns/p6.png'); /* 更换更细腻的纹理 */
+          background-image: url('https://www.transparenttextures.com/patterns/p6.png');
           opacity: 0.05;
           z-index: 9999; 
         }
 
-        /* 响应式排版微调 */
         .history-text {
           line-height: 2.2;
           letter-spacing: 0.05em;
+        }
+
+        /* 状态栏全局字体比例调整 */
+        .sidebar-text-lg {
+          font-size: 1.1rem;
         }
     </style>
 <script type="importmap">
@@ -79,6 +85,5 @@
 <body>
     <div class="texture-overlay"></div>
     <div id="root"></div>
-    <script type = "module" src = "/index.tsx"></script>
 </body>
 </html>
