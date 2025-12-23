@@ -2,8 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { EmpireStats, AIResponse, Dynasty } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
-
 const responseSchema = {
   type: Type.OBJECT,
   properties: {
@@ -57,6 +55,9 @@ const dynastySchema = {
 };
 
 export const generateDynasty = async (description: string): Promise<Dynasty> => {
+  // 在函数内部初始化以确保获取到最新的 API KEY
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const prompt = `根据以下描述，构思一个独特的帝国或文明设定：
   "${description || '一个未知的神秘国度'}"
   
@@ -74,11 +75,12 @@ export const generateDynasty = async (description: string): Promise<Dynasty> => 
       },
     });
 
+    if (!response.text) throw new Error("Empty AI response");
     const result = JSON.parse(response.text);
     return { ...result, id: Date.now().toString() };
   } catch (error) {
     console.error("Gemini Generation Error:", error);
-    throw new Error("构思失败，天数有变。");
+    throw error;
   }
 };
 
@@ -89,6 +91,8 @@ export const simulateTurn = async (
   command: string,
   historySummary: string
 ): Promise<AIResponse> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const prompt = `
     你是一个极其真实的宏观历史/文明模拟器。
     
@@ -130,9 +134,10 @@ export const simulateTurn = async (
       },
     });
 
+    if (!response.text) throw new Error("Empty AI response");
     return JSON.parse(response.text);
   } catch (error) {
     console.error("Gemini API Error:", error);
-    throw new Error("占卜失败，天机不可泄露。");
+    throw error;
   }
 };
